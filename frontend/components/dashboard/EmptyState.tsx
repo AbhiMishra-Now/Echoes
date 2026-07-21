@@ -1,0 +1,4 @@
+"use client";
+import { Baby, Trophy, Heart, MessageCircle, Feather, Lock } from "lucide-react";
+const prompts = [{ icon: Baby, text: "Tell me about your childhood..." }, { icon: Trophy, text: "What is your greatest achievement?" }, { icon: Heart, text: "Share a memory that shaped you..." }];
+export function EmptyState({ onPrompt }: { onPrompt: (text: string) => void }) { return <div className="empty-state"><div className="empty-illustration"><span>✒</span><i /></div><h2>Your Royal Biographer Awaits</h2><p>I shall guide you through your life&apos;s story, one memory at a time.</p><div className="empty-prompts">{prompts.map(({ icon: Icon, text }) => <button key={text} onClick={() => onPrompt(text)}><Icon/><b>{text}</b><small>Click to begin</small></button>)}</div><div className="how-it-works"><strong>How does it work?</strong><span><MessageCircle/> Share</span><i/><span><Feather/> Create</span><i/><span><Lock/> Preserve</span></div></div>; }

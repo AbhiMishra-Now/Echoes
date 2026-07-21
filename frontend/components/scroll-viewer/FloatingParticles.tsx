@@ -1,0 +1,7 @@
+"use client";
+import { useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+const MAX_PARTICLES = 200;
+/** Gold dust rendered as one instanced draw call, reduced on low-core devices. */
+export function FloatingParticles() { const ref = useRef<THREE.InstancedMesh>(null); const count = useMemo(() => Math.min(MAX_PARTICLES, Math.max(60, (typeof navigator === "undefined" ? 4 : navigator.hardwareConcurrency || 4) * 25)), []); const seeds = useMemo(() => Array.from({ length: count }, () => [Math.random() * 6 - 3, Math.random() * 4 - 2, Math.random() * 2 - 1] as const), [count]); const reduced = useRef(false); useEffect(() => { reduced.current = matchMedia("(prefers-reduced-motion: reduce)").matches; }, []); useFrame(({ clock }) => { if (!ref.current || reduced.current) return; const dummy = new THREE.Object3D(); seeds.forEach((seed, index) => { dummy.position.set(seed[0] + Math.sin(clock.elapsedTime * .4 + index) * .12, seed[1] + Math.cos(clock.elapsedTime * .55 + index) * .18, seed[2]); dummy.scale.setScalar(.015 + (index % 3) * .008); dummy.updateMatrix(); ref.current?.setMatrixAt(index, dummy.matrix); }); ref.current.instanceMatrix.needsUpdate = true; }); return <instancedMesh ref={ref} args={[undefined, undefined, count]} frustumCulled><sphereGeometry args={[1, 6, 6]}/><meshBasicMaterial color="#F4D03F" transparent opacity={.75} blending={THREE.AdditiveBlending}/></instancedMesh>; }

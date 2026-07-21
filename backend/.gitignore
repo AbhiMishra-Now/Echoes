@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Tests, IDE, OS, logs
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+*.log

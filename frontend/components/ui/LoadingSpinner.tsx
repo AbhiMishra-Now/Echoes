@@ -1,0 +1,1 @@
+export function LoadingSpinner({ label = "Crafting your narrative..." }: { label?: string }) { return <div className="scribe-thinking" role="status"><span className="thinking-quill">✒</span><i /><i /><i /><em>{label}</em></div>; }

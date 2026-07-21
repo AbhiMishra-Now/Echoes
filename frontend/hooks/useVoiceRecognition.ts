@@ -1,0 +1,4 @@
+"use client";
+import { useEffect, useState } from "react";
+type Recognition = SpeechRecognition & { continuous: boolean; interimResults: boolean; };
+export function useVoiceRecognition(onResult: (text: string) => void) { const [supported] = useState(() => typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition)); const [listening, setListening] = useState(false); useEffect(() => { return () => {}; }, []); const toggle = () => { if (!supported) return; const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition; if (!Ctor) return; const recognition: Recognition = new Ctor(); recognition.continuous = true; recognition.interimResults = false; recognition.onresult = e => onResult(Array.from(e.results).map(r => r[0].transcript).join(" ")); recognition.onend = () => setListening(false); if (listening) recognition.stop(); else { recognition.start(); setListening(true); } }; return { supported, listening, toggle }; }

@@ -1,0 +1,3 @@
+"use client";
+import { useEffect, useRef } from "react";
+export function ChatInput({ value, onChange, onSubmit }: { value: string; onChange: (value: string) => void; onSubmit: () => void }) { const ref = useRef<HTMLTextAreaElement>(null); useEffect(() => { if (ref.current) { ref.current.style.height = "auto"; ref.current.style.height = `${Math.min(ref.current.scrollHeight, 180)}px`; } }, [value]); return <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(); } }} placeholder="Share your memory, thought, or story..." aria-label="Your memory" maxLength={4000} rows={1} />; }

@@ -1,0 +1,3 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+export function useAutoScroll(dependency: unknown) { const ref = useRef<HTMLDivElement>(null); const [atBottom, setAtBottom] = useState(true); const check = () => { const el = ref.current; if (el) setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 200); }; useEffect(() => { if (atBottom) setTimeout(() => ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" }), 100); }, [dependency, atBottom]); return { ref, atBottom, check, scrollToBottom: () => ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" }) }; }
