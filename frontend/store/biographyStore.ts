@@ -25,7 +25,27 @@ export const useBiographyStore = create<State>()(persist((set) => ({
   completeAiMessage: (content) => set((state) => { const index = state.messages.map((message) => message.sender).lastIndexOf("ai"); if (index < 0) return state; const messages = [...state.messages]; messages[index] = { ...messages[index], content }; return { messages, isLoading: false, isTyping: false }; }),
   updateMessage: (id, content) => set((state) => ({ messages: state.messages.map((message) => message.id === id ? { ...message, content, originalText: content, isEdited: true } : message), unsavedChanges: true })),
   updateMessageMetadata: (id, metadata) => set((state) => ({ messages: state.messages.map((m) => m.id === id ? { ...m, metadata: { ...(m.metadata ?? {}), ...metadata } } : m), unsavedChanges: true })),
-  setChapters: (chapters) => set((state) => { const firstChapter = chapters[0]; return { chapters, currentChapterId: firstChapter?.id ?? opening.id, currentSpread: firstChapter?.layout ?? (firstChapter?.bookSpreads?.[firstChapter.bookSpreads.length - 1] ?? []) }; }), setBiographyId: (currentBiographyId) => set({ currentBiographyId }), createChapter: (chapter) => set((state) => ({ chapters: [...state.chapters, chapter], currentChapterId: chapter.id, currentSpread: chapter.layout ?? [], unsavedChanges: true })), switchChapter: (currentChapterId) => set((state) => { const chapter = state.chapters.find((c) => c.id === currentChapterId); return { currentChapterId, currentSpread: chapter?.layout ?? (chapter?.bookSpreads?.[chapter.bookSpreads.length - 1] ?? []) }; }), setLoading: (isLoading) => set({ isLoading }), setTyping: (isTyping) => set({ isTyping }), setPreviewMode: (previewMode) => set({ previewMode }), setEditMode: (editMode) => set({ editMode }), setRecording: (isRecording) => set({ isRecording }), setMediaUploadProgress: (mediaUploadProgress) => set({ mediaUploadProgress }), setIsLivingScrollOpen: (isLivingScrollOpen) => set({ isLivingScrollOpen }),
+  setChapters: (chapters) => set((state) => {
+    const firstChapter = chapters[0];
+    const allMessages = chapters.flatMap((c) => c.messages || []).map((m: any) => ({
+      id: m.id || crypto.randomUUID(),
+      chapterId: m.chapterId || firstChapter?.id || opening.id,
+      sender: m.role === "assistant" ? "ai" : (m.sender || "user"),
+      content: m.content || "",
+      originalText: m.originalText || m.content || "",
+      polishedCaption: m.polishedCaption || m.content || "",
+      activeVariant: m.activeVariant || "polished",
+      timestamp: new Date(m.timestamp || m.created_at || new Date()),
+      isEdited: m.isEdited || false,
+      media: m.media || []
+    }));
+    return {
+      chapters,
+      currentChapterId: firstChapter?.id ?? opening.id,
+      messages: allMessages,
+      currentSpread: firstChapter?.layout ?? (firstChapter?.bookSpreads?.[firstChapter.bookSpreads.length - 1] ?? [])
+    };
+  }), setBiographyId: (currentBiographyId) => set({ currentBiographyId }), createChapter: (chapter) => set((state) => ({ chapters: [...state.chapters, chapter], currentChapterId: chapter.id, currentSpread: chapter.layout ?? [], unsavedChanges: true })), switchChapter: (currentChapterId) => set((state) => { const chapter = state.chapters.find((c) => c.id === currentChapterId); return { currentChapterId, currentSpread: chapter?.layout ?? (chapter?.bookSpreads?.[chapter.bookSpreads.length - 1] ?? []) }; }), setLoading: (isLoading) => set({ isLoading }), setTyping: (isTyping) => set({ isTyping }), setPreviewMode: (previewMode) => set({ previewMode }), setEditMode: (editMode) => set({ editMode }), setRecording: (isRecording) => set({ isRecording }), setMediaUploadProgress: (mediaUploadProgress) => set({ mediaUploadProgress }), setIsLivingScrollOpen: (isLivingScrollOpen) => set({ isLivingScrollOpen }),
   attachMedia: (media) => set((state) => { const index = state.messages.map((message) => message.sender).lastIndexOf("user"); if (index < 0 || state.messages[index]?.chapterId !== state.currentChapterId) return { messages: [...state.messages, mediaOnlyMessage(state.currentChapterId, media)], unsavedChanges: true }; const messages = [...state.messages]; messages[index] = { ...messages[index], media: [...(messages[index].media ?? []), media] }; return { messages, unsavedChanges: true }; }),
   updatePreviewNarrative: (narrative) => set((state) => ({ narrativeByChapter: { ...state.narrativeByChapter, [narrative.chapterId]: narrative } })), syncToBackend: async () => { set({ lastSaved: new Date(), unsavedChanges: false }); }, addToast: (toast) => set((state) => ({ toasts: [...state.toasts, { ...toast, id: crypto.randomUUID() }] })), dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })), markSaved: () => set({ lastSaved: new Date(), unsavedChanges: false }),
   removeChapter: (chapterId) => set((state) => {

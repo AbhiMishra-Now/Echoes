@@ -62,6 +62,7 @@ class ChapterResponse(ChapterCreate):
     user_id: str
     created_at: datetime
     updated_at: datetime
+    messages: list | None = Field(default=None)
 
 
 class PresignedUrlRequest(StrictSchema):

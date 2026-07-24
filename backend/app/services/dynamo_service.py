@@ -21,7 +21,7 @@ def _biography_response(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _chapter_response(item: dict[str, Any]) -> dict[str, Any]:
-    return {"id": item["chapter_id"], "biography_id": item["bio_id"], "user_id": item["user_id"], "title": item["title"], "description": item.get("description", ""), "time_period": item.get("time_period"), "cover_image": item.get("cover_image"), "order": item.get("order", 0), "created_at": item["created_at"], "updated_at": item["updated_at"], "layout": item.get("layout")}
+    return {"id": item["chapter_id"], "biography_id": item["bio_id"], "user_id": item["user_id"], "title": item["title"], "description": item.get("description", ""), "time_period": item.get("time_period"), "cover_image": item.get("cover_image"), "order": item.get("order", 0), "created_at": item["created_at"], "updated_at": item["updated_at"], "layout": item.get("layout"), "messages": item.get("messages", [])}
 
 
 async def create_biography(dynamodb: Any, user_id: str, title: str) -> dict[str, Any]:
