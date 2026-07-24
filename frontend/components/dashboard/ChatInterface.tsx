@@ -1,5 +1,6 @@
 "use client";
 
+import { Sparkles } from "lucide-react";
 import { FileDropZone } from "../ui/FileDropZone";
 import { AIThinkingIndicator } from "../ui/AIThinkingIndicator";
 import { MessageSkeleton } from "../ui/MessageSkeleton";
@@ -12,7 +13,7 @@ import { EmptyState } from "./EmptyState";
 import { InputArea } from "./InputArea";
 import { MessageBubble } from "./MessageBubble";
 
-export function ChatInterface() {
+export function ChatInterface({ onOpenEditor }: { onOpenEditor?: () => void }) {
   const {
     messages,
     currentChapterId,
@@ -31,12 +32,29 @@ export function ChatInterface() {
     chapterId: currentChapterId,
   });
 
+  const store = useBiographyStore();
   const media = useMediaUpload(currentChapterId);
   const visible = messages.filter((m) => m.chapterId === currentChapterId);
   const scroll = useAutoScroll(`${visible.length}-${isLoading}`);
 
+  const handleSendMessage = (text: string) => {
+    stream.sendMessage(text);
+    store.addToast({
+      title: "Memory Inscribed",
+      message: "✨ Click 'Preview Mode' to design your page.",
+      variant: "info",
+      duration: 3000,
+    });
+  };
+
   const uploadFiles = async (files: File[]) => {
     for (const file of files) await media.upload(file);
+    store.addToast({
+      title: "Memory Inscribed",
+      message: "✨ Click 'Preview Mode' to design your page.",
+      variant: "info",
+      duration: 3000,
+    });
   };
 
   // Determine dynamic prompt header based on current chapter or fallback
@@ -44,15 +62,13 @@ export function ChatInterface() {
 
   return (
     <FileDropZone onFiles={uploadFiles}>
-      <section className="relative flex flex-col h-full min-h-[550px] bg-[#100018] rounded-3xl border border-gold/30 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
+      <section className="relative flex flex-col h-full min-h-[550px] bg-[#100018] rounded-3xl border border-gold/30 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden w-full">
         
         {/* Scroll Roller at the top (top cylinder) */}
         <div className="absolute top-0 inset-x-4 z-20 h-6 rounded-full bg-gradient-to-b from-[#eedcb4] via-[#c4a675] to-[#7c5d32] border-b border-gold/30 shadow-[0_4px_10px_rgba(0,0,0,0.35)]" />
 
         {/* The main parchment scroll body */}
-        <div className="relative flex-1 flex flex-col bg-parchment mx-5 mt-3 mb-6 rounded-b-2xl shadow-inner overflow-hidden border-x border-b border-[#a87c2e]/20">
-          {/* Paper texture overlay */}
-          <div className="absolute inset-0 paper-texture opacity-60 pointer-events-none" />
+        <div className="relative flex-1 flex flex-col bg-parchment mx-2 mt-3 mb-4 rounded-b-2xl shadow-inner overflow-hidden border-x border-b border-[#a87c2e]/20 w-[calc(100%-16px)]">
           <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#d4a853]/15 to-transparent pointer-events-none" />
           <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#d4a853]/15 to-transparent pointer-events-none" />
 
@@ -80,14 +96,14 @@ export function ChatInterface() {
 
           {/* Chat scroll space inside the parchment */}
           <div
-            className="flex-1 overflow-y-auto scroll-hide px-6 py-4 relative z-10"
+            className="flex-1 overflow-y-auto scroll-hide px-6 py-4 relative z-10 w-full"
             ref={scroll.ref}
             onScroll={scroll.check}
           >
             {visible.length === 0 ? (
               <EmptyState onPrompt={stream.sendMessage} />
             ) : (
-              <div className="messages max-w-2xl mx-auto">
+              <div className="messages max-w-4xl mx-auto w-full px-4">
                 {visible.map((m) => (
                   <MessageBubble key={m.id} message={m} />
                 ))}
@@ -98,6 +114,20 @@ export function ChatInterface() {
                   </>
                 )}
                 <AIThinkingIndicator isVisible={isTyping} />
+                {visible.length >= 3 && (
+                  <div className="text-center py-4 my-2 border-t border-b border-gold/15 bg-[#1b0227]/30 rounded-2xl p-4">
+                    <p className="font-serif italic text-sm text-gold-bright/80 mb-2">
+                      ✦ You have gathered {visible.length} memories for this chapter
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onOpenEditor}
+                      className="bg-gradient-to-r from-gold-bright via-gold to-gold-dim text-[#1b0227] font-display px-6 py-3 rounded-full shadow-lg hover:scale-105 transition font-bold uppercase tracking-wider text-xs inline-flex items-center gap-2 border border-gold"
+                    >
+                      ✨ Design This Chapter
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -147,7 +177,7 @@ export function ChatInterface() {
           {/* Curved text input box */}
           <div className="relative z-20 mt-auto bg-gradient-to-t from-parchment via-parchment/95 to-transparent pt-4">
             <InputArea
-              onSend={stream.sendMessage}
+              onSend={handleSendMessage}
               onFiles={uploadFiles}
               loading={stream.isLoading}
             />

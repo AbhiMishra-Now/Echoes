@@ -152,3 +152,31 @@ async def delete_chat_message(dynamodb: Any, user_id: str, chapter_id: str, mess
         UpdateExpression="SET messages = :messages, updated_at = :updated",
         ExpressionAttributeValues={":messages": filtered, ":updated": _now()}
     )
+
+
+async def soft_delete_memory(dynamodb: Any, user_id: str, memory_id: str) -> None:
+    """Soft delete memory by marking deleted_at timestamp and cascading remove from active items."""
+    table = await dynamodb.Table(get_settings().dynamodb_biography_table)
+    response = await table.query(KeyConditionExpression=Key("PK").eq(f"USER#{user_id}") & Key("SK").begins_with("CHAPTER#"))
+    chapters = response.get("Items", [])
+    now_str = _now()
+    
+    for ch in chapters:
+        messages = ch.get("messages", [])
+        modified = False
+        new_messages = []
+        for m in messages:
+            if m.get("id") == memory_id:
+                m["deleted_at"] = now_str
+                modified = True
+            else:
+                new_messages.append(m)
+        if modified:
+            layout = ch.get("layout", [])
+            new_layout = [el for el in layout if el.get("id") != memory_id and el.get("memory_id") != memory_id]
+            await table.update_item(
+                Key={"PK": f"USER#{user_id}", "SK": f"CHAPTER#{ch['chapter_id']}"},
+                UpdateExpression="SET messages = :messages, layout = :layout, updated_at = :updated",
+                ExpressionAttributeValues={":messages": new_messages, ":layout": new_layout, ":updated": now_str}
+            )
+

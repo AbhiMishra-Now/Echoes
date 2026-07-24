@@ -27,3 +27,23 @@ export async function deleteChapter(bioId: string, chapterId: string, userId: st
 export async function deleteMessage(bioId: string, chapterId: string, messageId: string, userId: string): Promise<void> {
   await api.delete(`/biographies/${encodeURIComponent(bioId)}/chapters/${encodeURIComponent(chapterId)}/messages/${encodeURIComponent(messageId)}`, { params: { user_id: userId } });
 }
+
+export type MemoryDraftResponse = { original_text: string; polished_caption: string; suggested_position: string; decorative_element: string };
+export type LayoutItem = { memory_id: string; page: "left" | "right"; x_percent: number; y_percent: number; width_percent: number; rotation_deg: number; z_index: number; text_variant: "original" | "polished" };
+
+export async function generateDraft(userMessage: string, imageDescription?: string): Promise<MemoryDraftResponse> {
+  return (await api.post<MemoryDraftResponse>("/memories/generate-draft", { user_message: userMessage, image_description: imageDescription })).data;
+}
+
+export async function generateLayout(chapterId: string, memories: any[], seed?: number): Promise<LayoutItem[]> {
+  return (await api.post<LayoutItem[]>(`/chapters/${encodeURIComponent(chapterId)}/generate-layout`, { memories, seed })).data;
+}
+
+export async function exportBook(spreads: any[], chapterTitle?: string): Promise<{ status: string; pdf_url: string; export_id: string }> {
+  return (await api.post<{ status: string; pdf_url: string; export_id: string }>("/books/export", { spreads, chapterTitle })).data;
+}
+
+export async function deleteMemoryApi(memoryId: string, userId: string = "local-legacy-builder"): Promise<void> {
+  await api.delete(`/memories/${encodeURIComponent(memoryId)}`, { params: { user_id: userId } });
+}
+

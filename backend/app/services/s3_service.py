@@ -16,11 +16,11 @@ async def generate_presigned_upload_url(file_key: str, content_type: str) -> str
 
 
 async def generate_presigned_download_url(file_key: str) -> str:
-    """Generate a 5-minute authenticated read URL for private media."""
+    """Generate a 7-day authenticated read URL for private media."""
     settings = get_settings()
     session = get_session()
     async with session.client("s3") as client:
-        return await client.generate_presigned_url("get_object", Params={"Bucket": settings.s3_bucket_name, "Key": file_key}, ExpiresIn=300)
+        return await client.generate_presigned_url("get_object", Params={"Bucket": settings.s3_bucket_name, "Key": file_key}, ExpiresIn=604800)
 
 
 def object_url(file_key: str) -> str:

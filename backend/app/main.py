@@ -17,7 +17,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 settings = get_settings()
 app = FastAPI(title=settings.project_name, version="1.0.0", description="A secure archive for living legacies.", openapi_url=f"{settings.api_v1_str}/openapi.json", docs_url=f"{settings.api_v1_str}/docs", redoc_url=f"{settings.api_v1_str}/redoc", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.backend_cors_origins, allow_credentials=True, allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["Content-Type", "Authorization"])
+app.add_middleware(CORSMiddleware, allow_origins=settings.backend_cors_origins, allow_credentials=True, allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization"])
 app.include_router(health.router, prefix=settings.api_v1_str)
 app.include_router(biography.router, prefix=settings.api_v1_str)
 app.include_router(upload.router, prefix=settings.api_v1_str)

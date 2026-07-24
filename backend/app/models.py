@@ -82,3 +82,52 @@ class ChatStreamRequest(StrictSchema):
     user_id: str = Field(min_length=1, max_length=128)
     bio_id: str = Field(min_length=1, max_length=128)
     chapter_id: str = Field(min_length=1, max_length=128)
+
+
+class DraftGenerationRequest(StrictSchema):
+    user_message: str = Field(min_length=1, max_length=8000)
+    image_description: str | None = Field(default=None, max_length=1000)
+
+
+class DraftGenerationResponse(StrictSchema):
+    original_text: str
+    polished_caption: str
+    suggested_position: str = "center"
+    decorative_element: str = "none"
+
+
+class MemoryLayoutInput(StrictSchema):
+    id: str
+    type: str = "text"
+    polished_caption: str | None = None
+    original_text: str | None = None
+    image_url: str | None = None
+
+
+class LayoutGenerationRequest(StrictSchema):
+    memories: list[MemoryLayoutInput] = Field(default_factory=list)
+    seed: int | None = None
+
+
+class LayoutItemResponse(StrictSchema):
+    memory_id: str
+    page: str = "left"
+    x_percent: int = 10
+    y_percent: int = 10
+    width_percent: int = 30
+    rotation_deg: int = 0
+    z_index: int = 1
+    text_variant: str = "polished"
+
+
+class BookExportRequest(StrictSchema):
+    spreadIds: list[str] | None = Field(default=None)
+    spreads: list[dict[str, Any]] | None = Field(default=None)
+    chapterTitle: str | None = Field(default=None, max_length=180)
+
+
+class BookExportResponse(StrictSchema):
+    status: str = "success"
+    pdf_url: str
+    export_id: str
+

@@ -130,3 +130,115 @@ async def structure_narrative(chat_history: list[dict[str, Any]], chapter_title:
     if not required.issubset(data) or not isinstance(data["narrative_text"], str):
         raise ValueError("The narrative response did not contain the required scroll fields.")
     return {"chapter_title": str(data["chapter_title"]), "narrative_text": data["narrative_text"], "key_themes": [str(item) for item in data["key_themes"]], "suggested_media_tags": [str(item) for item in data["suggested_media_tags"]]}
+
+
+async def generate_memory_draft(user_message: str, image_description: str | None = None) -> dict[str, Any]:
+    """Convert raw user memory input into an elegant biographer caption JSON."""
+    img_context = image_description or "No image present"
+    prompt = (
+        "You are a Royal Biographer. Convert this raw memory into an elegant book caption.\n"
+        f'Raw Input: "{user_message}"\n'
+        f'Image Context: "{img_context}"\n\n'
+        "Return ONLY valid JSON:\n"
+        "{\n"
+        f'  "original_text": "{user_message}",\n'
+        '  "polished_caption": "Elegant 1-2 sentence description in Cormorant Garamond style",\n'
+        '  "suggested_position": "left|right|center",\n'
+        '  "decorative_element": "none|vintage_border|gold_frame|wax_seal"\n'
+        "}"
+    )
+    try:
+        output = await _collect_prompt(prompt)
+        start, end = output.find("{"), output.rfind("}")
+        if start >= 0 and end > start:
+            data = json.loads(output[start : end + 1])
+            return {
+                "original_text": user_message,
+                "polished_caption": str(data.get("polished_caption", user_message)),
+                "suggested_position": str(data.get("suggested_position", "center")),
+                "decorative_element": str(data.get("decorative_element", "none")),
+            }
+    except Exception as exc:
+        logger.warning("Draft generation AI fallback invoked: %s", exc)
+
+    # Fallback caption generator if AI output is unavailable
+    words = user_message.strip().split()
+    first_sentence = user_message.strip()
+    if len(words) > 20:
+        first_sentence = " ".join(words[:20]) + "..."
+    polished = f"In quiet reflection: \"{first_sentence}\"—a treasured milestone woven into the tapestry of memory."
+    return {
+        "original_text": user_message,
+        "polished_caption": polished,
+        "suggested_position": "center",
+        "decorative_element": "gold_frame" if image_description else "none",
+    }
+
+
+async def generate_chapter_layout(memories: list[dict[str, Any]], seed: int | None = None) -> list[dict[str, Any]]:
+    """Generate an AI layout array for scrapbook spread elements."""
+    if not memories:
+        return []
+
+    memories_summary = [
+        {
+            "id": m.get("id"),
+            "type": m.get("type", "text"),
+            "polished_caption": m.get("polished_caption") or m.get("original_text") or "",
+            "image_url": m.get("image_url"),
+        }
+        for m in memories
+    ]
+
+    prompt = (
+        "Generate a 2-page scrapbook spread layout for these memories.\n"
+        f"Memories: {json.dumps(memories_summary)}\n"
+        f"Seed hint: {seed or 0}\n\n"
+        "Return ONLY valid JSON array:\n"
+        "[\n"
+        "  {\n"
+        '    "memory_id": "xyz",\n'
+        '    "page": "left|right",\n'
+        '    "x_percent": 10-90,\n'
+        '    "y_percent": 10-90,\n'
+        '    "width_percent": 20-40,\n'
+        '    "rotation_deg": -5 to 5,\n'
+        '    "z_index": 1-10,\n'
+        '    "text_variant": "original|polished"\n'
+        "  }\n"
+        "]"
+    )
+
+    try:
+        output = await _collect_prompt(prompt)
+        start, end = output.find("["), output.rfind("]")
+        if start >= 0 and end > start:
+            layout_data = json.loads(output[start : end + 1])
+            if isinstance(layout_data, list) and len(layout_data) > 0:
+                return layout_data
+    except Exception as exc:
+        logger.warning("Layout generation AI fallback invoked: %s", exc)
+
+    # Deterministic Algorithmic Fallback Layout Generator
+    seed_offset = (seed or 0) % 5
+    fallback_items: list[dict[str, Any]] = []
+    
+    for i, m in enumerate(memories):
+        page = "left" if (i + seed_offset) % 2 == 0 else "right"
+        base_y = 12 + ((i // 2) * 28) % 70
+        base_x = 15 + ((i * 25) + seed_offset * 10) % 55
+        rot = (-4 + ((i * 3 + seed_offset * 2) % 9))
+        
+        fallback_items.append({
+            "memory_id": str(m.get("id")),
+            "page": page,
+            "x_percent": base_x,
+            "y_percent": base_y,
+            "width_percent": 35 if m.get("type") == "image" else 45,
+            "rotation_deg": rot,
+            "z_index": i + 1,
+            "text_variant": "polished"
+        })
+
+    return fallback_items
+

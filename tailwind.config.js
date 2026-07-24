@@ -12,6 +12,9 @@ module.exports = {
         display: ['var(--font-cormorant)', 'Times New Roman', 'serif'],
         body: ['var(--font-outfit)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         script: ['var(--font-great-vibes)', 'cursive'],
+        cinzel: ['"Cinzel Decorative"', 'serif'],
+        caveat: ['Caveat', 'cursive'],
+        garamond: ['"Cormorant Garamond"', 'serif'],
       },
       colors: {
         ink: {

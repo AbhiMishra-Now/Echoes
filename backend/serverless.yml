@@ -1,0 +1,40 @@
+service: echoes-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.12
+  architecture: arm64          # CRITICAL: Enables Graviton2
+  region: us-east-1
+  memorySize: 512              # ARM64 performs better at lower memory
+  timeout: 30
+  environment:
+    AWS_REGION: ${self:provider.region}
+    DYNAMODB_TABLE: echoes_biographies
+    S3_BUCKET: echoes-media-bucket-YOURINITIALS
+    REPLICATE_API_TOKEN: ${env:REPLICATE_API_TOKEN}
+  
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:*
+            - s3:*
+          Resource: "*"
+
+functions:
+  api:
+    handler: handler.handler     # Points to handler.py
+    events:
+      - httpApi: '*'             # Creates HTTP API Gateway
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux      # Ensures ARM64 compatible binaries
+    slim: true                   # Reduces package size
+    strip: false                 # Prevents stripping needed libs

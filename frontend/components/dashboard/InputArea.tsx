@@ -25,7 +25,7 @@ export function InputArea({
   };
 
   return (
-    <div className="relative w-full max-w-3xl mx-auto px-4 pb-4">
+    <div className="relative w-full max-w-4xl mx-auto px-4 pb-4">
       {/* Curved white input box resembling the attached design mockup */}
       <div className="flex items-center gap-3 bg-[#fffdf9] border-2 border-gold/45 rounded-full px-5 py-2.5 shadow-[0_6px_16px_rgba(0,0,0,0.15)] transition-shadow focus-within:shadow-[0_6px_20px_rgba(212,175,55,0.25)]">
         {/* Attachment clip */}

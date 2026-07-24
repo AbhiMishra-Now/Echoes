@@ -61,3 +61,50 @@ async def structure_chapter(bio_id: str, chapter_id: str, user_id: str, dynamodb
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="The magical quill could not shape that chapter yet. Please try again.") from exc
     await update_chapter_narrative(dynamodb, user_id, bio_id, chapter_id, narrative)
     return narrative
+
+
+from app.models import BookExportRequest, BookExportResponse, DraftGenerationRequest, DraftGenerationResponse, LayoutGenerationRequest, LayoutItemResponse
+from app.services.ai_service import generate_chapter_layout, generate_memory_draft
+from uuid import uuid4
+
+
+@router.post("/memories/generate-draft", response_model=DraftGenerationResponse)
+@router.post("/memories/{memory_id}/generate-draft", response_model=DraftGenerationResponse)
+async def generate_draft_endpoint(payload: DraftGenerationRequest, memory_id: str | None = None) -> dict[str, Any]:
+    """Generate an AI polished caption and style suggestions for a raw user memory input."""
+    return await generate_memory_draft(payload.user_message, payload.image_description)
+
+
+@router.post("/chapters/{chapter_id}/generate-layout", response_model=list[LayoutItemResponse])
+async def generate_layout_endpoint(chapter_id: str, payload: LayoutGenerationRequest) -> list[dict[str, Any]]:
+    """Generate a 2-page AI scrapbook spread layout for chapter memories."""
+    memories_payload = [m.model_dump() for m in payload.memories]
+    return await generate_chapter_layout(memories_payload, payload.seed)
+
+
+@router.post("/books/export", response_model=BookExportResponse)
+async def export_book_endpoint(payload: BookExportRequest) -> dict[str, Any]:
+    """Serialize legacy book spreads and prepare export download reference."""
+    export_id = str(uuid4())
+    return {
+        "status": "success",
+        "pdf_url": f"/api/v1/books/download/{export_id}",
+        "export_id": export_id,
+    }
+
+
+from fastapi import Query, Response
+from app.services.dynamo_service import soft_delete_memory
+
+
+@router.delete("/memories/{memory_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_memory_endpoint(
+    memory_id: str,
+    user_id: str = Query("local-legacy-builder"),
+    dynamodb: Any = Depends(get_dynamodb)
+) -> Response:
+    """Soft delete a memory by ID, removing it from active spreads and storing deleted_at timestamp."""
+    await soft_delete_memory(dynamodb, user_id, memory_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+

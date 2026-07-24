@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Eye, Save, UserRound, X } from "lucide-react";
+import { Eye, Save, UserRound, X, Home, PlusCircle, BookOpen, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBiography } from "../../hooks/useBiography";
 import { Sidebar } from "./Sidebar";
 import { ChatInterface } from "./ChatInterface";
 import { BiographyPreview } from "./BiographyPreview";
 import { FullscreenEditor } from "./FullscreenEditor";
+import { ExportBookModal } from "./ExportBookModal";
 import { ToastContainer } from "../ui/ToastContainer";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { useBiographySync } from "../../hooks/useBiographySync";
@@ -55,6 +56,19 @@ export function DashboardLayout() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showNewChapterModal, setShowNewChapterModal] = useState(false);
   const [isFullscreenEditor, setIsFullscreenEditor] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileDrawer, setShowMobileDrawer] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const current = chapters.find((c) => c.id === currentChapterId);
 
@@ -99,7 +113,7 @@ export function DashboardLayout() {
             ECHOES
           </Link>
           <span className="font-display text-base tracking-[0.15em] text-gold-bright uppercase font-medium select-none hidden md:inline">
-            {current?.title ?? "THE FIRST PAGES"}
+            THE LEGACY CREATOR
           </span>
           <div className="flex items-center gap-3">
             <button
@@ -125,47 +139,116 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        {/* 3-Column structured dashboard grid layout matching classic mockup */}
-        <div className="dashboard-body flex-1 grid grid-cols-[280px_1fr_380px] h-full min-h-0 overflow-hidden relative">
+        {/* 2-Column structured dashboard layout: Left Sidebar (dynamic width) + Full Width Center Panel (1fr) */}
+        <div 
+          className="dashboard-body flex-1 grid h-full min-h-0 overflow-hidden relative transition-all duration-300 ease-in-out"
+          style={{ gridTemplateColumns: isMobile ? "1fr" : isExpanded ? "280px 1fr" : "72px 1fr" }}
+        >
           
-          {/* LEFT SIDEBAR: Static leather panel */}
-          <div className="h-full bg-[#2E0249] relative flex flex-col z-20 shrink-0 select-none border-r-2 border-gold/45 w-[280px] p-4">
-            {/* Gold filigree corners */}
-            <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-gold/40 rounded-tl pointer-events-none" />
-            <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-gold/40 rounded-tr pointer-events-none" />
-            <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-gold/40 rounded-bl pointer-events-none" />
-            <div className="absolute bottom-2 right-2 w-6 h-6 border-[#d4a853]/40 border-b-2 border-r-2 rounded-br pointer-events-none" />
-            
-            <div className="flex-1 min-h-0">
-              <Sidebar onNew={newChapter} />
+          {/* LEFT SIDEBAR: Collapsible leather panel */}
+          {!isMobile && (
+            <div 
+              onMouseEnter={() => setIsExpanded(true)}
+              onMouseLeave={() => setIsExpanded(false)}
+              className={`h-full bg-leather relative flex flex-col z-20 shrink-0 select-none border-r-2 border-gold/45 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] transition-all duration-300 ease-in-out overflow-hidden ${
+                isExpanded ? "w-[280px] p-5" : "w-[72px] p-2"
+              }`}
+            >
+              {/* Gold filigree corners (visible only when expanded) */}
+              {isExpanded && (
+                <>
+                  <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-gold/40 rounded-tl pointer-events-none z-30" />
+                  <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-gold/40 rounded-tr pointer-events-none z-30" />
+                  <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-gold/40 rounded-bl pointer-events-none z-30" />
+                  <div className="absolute bottom-2 right-2 w-6 h-6 border-[#d4a853]/40 border-b-2 border-r-2 rounded-br pointer-events-none z-30" />
+                </>
+              )}
+              
+              <div className="flex-1 min-h-0">
+                <Sidebar 
+                  onNew={newChapter} 
+                  onOpenExport={() => setShowExportModal(true)} 
+                  isExpanded={isExpanded}
+                  setIsExpanded={setIsExpanded}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* CENTER PANEL: Skeuomorphic parchment chat scroll on dark wood table background */}
-          <div className="flex-1 relative h-full flex flex-col min-h-0 overflow-hidden bg-[#160b06] bg-gradient-to-b from-[#1c0f0a] to-[#120704] p-5 shadow-inner">
+          {/* CENTER PANEL: Full width chat workspace */}
+          <div className={`flex-1 relative h-full flex flex-col min-h-0 overflow-hidden bg-[#160b06] p-4 shadow-inner w-full ${isMobile ? "pb-20" : ""}`}>
             {/* Horizontal wood grain grid lines backdrop simulation */}
             <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.15)_1px,transparent_1px)] bg-[size:100%_40px] pointer-events-none opacity-45" />
             
-            {/* Scroll Workspace (ChatInterface inside) */}
-            <div className="flex-1 relative min-h-0 overflow-hidden flex flex-col">
-              <ChatInterface />
-            </div>
-          </div>
-
-          {/* RIGHT SIDEBAR: Deep Purple Velvet Scroll Preview (Always Open) */}
-          <div className="h-full bg-[#190022] border-l-2 border-gold/45 z-20 w-[380px] p-4 flex flex-col shrink-0 relative">
-            {/* Floating Stars */}
-            <div className="absolute top-8 left-12 w-1 h-1 bg-[#ffd875] rounded-full animate-pulse opacity-60 shadow-[0_0_4px_#ffd875]" />
-            <div className="absolute top-24 right-16 w-1 h-1 bg-[#ffd875] rounded-full animate-pulse opacity-85 shadow-[0_0_4px_#ffd875] delay-700" />
-            <div className="absolute bottom-32 left-8 w-1 h-1 bg-[#ffd875] rounded-full animate-pulse opacity-40 shadow-[0_0_4px_#ffd875] delay-300" />
-            <div className="absolute bottom-16 right-20 w-1.5 h-1.5 bg-[#ffd875] rounded-full animate-pulse opacity-90 shadow-[0_0_4px_#ffd875] delay-1000" />
-            
-            <div className="flex-1 min-h-0">
-              <BiographyPreview onExpand={() => setIsFullscreenEditor(true)} />
+            {/* Full-width Scroll Workspace */}
+            <div className="flex-1 relative min-h-0 overflow-hidden flex flex-col w-full">
+              <ChatInterface onOpenEditor={() => setIsFullscreenEditor(true)} />
             </div>
           </div>
 
         </div>
+
+        {/* Mobile bottom navigation bar */}
+        {isMobile && (
+          <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#2E0249] flex items-center justify-around z-40 border-t-2 border-gold/45 shadow-2xl">
+            <button
+              onClick={() => setShowMobileDrawer(true)}
+              className="flex flex-col items-center gap-1 text-gold-bright hover:scale-105 transition"
+            >
+              <Home className="h-5.5 w-5.5" />
+              <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-gold/80">Journey</span>
+            </button>
+            <button
+              onClick={newChapter}
+              className="flex flex-col items-center gap-1 text-gold-bright hover:scale-105 transition"
+            >
+              <PlusCircle className="h-5.5 w-5.5" />
+              <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-gold/80">Add</span>
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="flex flex-col items-center gap-1 text-gold-bright hover:scale-105 transition"
+            >
+              <BookOpen className="h-5.5 w-5.5" />
+              <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-gold/80">Book</span>
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="flex flex-col items-center gap-1 text-gold-bright hover:scale-105 transition"
+            >
+              <Share2 className="h-5.5 w-5.5" />
+              <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-gold/80">Share</span>
+            </button>
+          </div>
+        )}
+
+        {/* Mobile full screen drawer */}
+        {isMobile && showMobileDrawer && (
+          <div className="fixed inset-0 bg-[#1a0b2e]/98 flex flex-col z-50 animate-in slide-in-from-bottom duration-300 p-6">
+            <div className="flex justify-between items-center border-b border-gold/15 pb-4 mb-4">
+              <h2 className="font-display text-gold-bright text-lg uppercase tracking-wider">Your Journey</h2>
+              <button
+                onClick={() => setShowMobileDrawer(false)}
+                className="p-1 rounded-full border border-gold/45 text-gold-bright bg-white/5 hover:bg-white/10 transition"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <Sidebar 
+                onNew={() => {
+                  newChapter();
+                  setShowMobileDrawer(false);
+                }} 
+                onOpenExport={() => {
+                  setShowExportModal(true);
+                  setShowMobileDrawer(false);
+                }}
+                isExpanded={true}
+              />
+            </div>
+          </div>
+        )}
 
 
 
@@ -230,6 +313,10 @@ export function DashboardLayout() {
           isOpen={isFullscreenEditor}
           onClose={() => setIsFullscreenEditor(false)}
           chapterId={currentChapterId}
+        />
+        <ExportBookModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
         />
       </main>
     </ErrorBoundary>

@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { X, Trash2, Type, Image as ImageIcon, Sparkles, Save, ChevronLeft, ChevronRight } from "lucide-react";
-import { useBiographyStore } from "../../store/biographyStore";
+import { X, Trash2, Type, Image as ImageIcon, Sparkles, Save, ChevronLeft, ChevronRight, Pencil, BookOpen } from "lucide-react";
+import { useBiographyStore, useUiStore } from "../../store/biographyStore";
 import { useMediaUpload } from "../../hooks/useMediaUpload";
-import { updateChapter } from "../../lib/api";
+import { deleteMemoryApi, generateLayout, updateChapter } from "../../lib/api";
+import { DeleteConfirmationModal } from "../ui/DeleteConfirmationModal";
+import { ExportBookModal } from "./ExportBookModal";
+import { LivingScrollOverlay } from "./LivingScrollOverlay";
 
 interface LayoutElement {
   id: string;
@@ -15,6 +18,8 @@ interface LayoutElement {
   y: number;
   width: number;
   rotation: number;
+  isUserModified?: boolean;
+  textVariant?: "original" | "polished";
 }
 
 interface FullscreenEditorProps {
@@ -31,86 +36,83 @@ const MAGICAL_STICKERS = [
   { id: "scroll_border", emoji: "📜", name: "Scroll Bracket" },
 ];
 
+const THEME_COLORS = [
+  { name: "Parchment", color: "#FDFBF7" },
+  { name: "Sage Green", color: "#F4F6F0" },
+  { name: "Soft Blue", color: "#F0F3F7" },
+  { name: "Vintage Rose", color: "#F7F3F4" },
+  { name: "Antique Gold", color: "#FAF6ED" },
+];
+
 export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEditorProps) {
   const store = useBiographyStore();
-  const { currentBiographyId, currentUser, messages, chapters, addToast } = store;
+  const { currentBiographyId, currentUser, messages, chapters, addToast, currentSpread } = store;
+  const isLivingScrollOpen = useUiStore((state) => state.isLivingScrollOpen);
+  const setIsLivingScrollOpen = useUiStore((state) => state.setIsLivingScrollOpen);
   const currentChapter = chapters.find((c) => c.id === chapterId);
 
   const [elements, setElements] = useState<LayoutElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showStickers, setShowStickers] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState(currentChapter?.title || "");
+  const [isMobile, setIsMobile] = useState(false);
+  const [selectedBgColor, setSelectedBgColor] = useState("#FDFBF7");
+  const [showExport, setShowExport] = useState(false);
+  const seedRef = useRef(0);
+  const hasInitializedRef = useRef(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
   const upload = useMediaUpload(chapterId);
 
-  // Load layout from current chapter on open
   useEffect(() => {
-    if (isOpen && currentChapter) {
-      if (currentChapter.layout && Array.isArray(currentChapter.layout)) {
-        setElements(currentChapter.layout as LayoutElement[]);
-      } else {
-        // Build initial layout from chapter messages if no layout saved
-        const initialElements: LayoutElement[] = [];
-        let yOffset = 80;
-        
-        const chapterMessages = messages.filter((m) => m.chapterId === chapterId);
-        
-        // Add AI/User text
-        const combinedText = chapterMessages
-          .filter((m) => m.sender === "user" && m.content.trim())
-          .map((m) => m.content.trim())
-          .join("\n\n");
+    if (currentChapter?.title) setTitleInput(currentChapter.title);
+  }, [currentChapter?.title]);
 
-        if (combinedText) {
-          initialElements.push({
-            id: "initial-text",
-            type: "text",
-            content: combinedText,
-            x: 100,
-            y: yOffset,
-            width: 500,
-            rotation: -1,
-          });
-          yOffset += 240;
-        }
-
-        // Add photos
-        const images = chapterMessages.flatMap((m) => m.media ?? []).filter((media) => media.type === "image");
-        images.forEach((img, index) => {
-          initialElements.push({
-            id: `initial-img-${index}`,
-            type: "image",
-            url: img.url,
-            x: 150 + index * 80,
-            y: yOffset,
-            width: 250,
-            rotation: (index % 2 === 0 ? 3 : -3),
-          });
-          yOffset += 220;
-        });
-
-        setElements(initialElements);
-      }
+  const handleSaveTitle = () => {
+    setIsEditingTitle(false);
+    if (titleInput.trim() && currentChapter) {
+      store.updateChapterTitle(chapterId, titleInput.trim());
+      addToast({
+        title: "Title Inscribed",
+        message: `Chapter title saved as "${titleInput.trim()}".`,
+        variant: "success",
+        duration: 2000,
+      });
     }
-  }, [isOpen, chapterId, currentChapter, messages]);
+  };
 
   // Debounced auto-save every 5 seconds
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  const saveLayout = useCallback(async (currentElements: LayoutElement[], silent = false) => {
+  const saveLayout = useCallback(async (currentElements: LayoutElement[], silent = false, customBgColor?: string) => {
     if (!currentBiographyId || !currentChapter) return;
     try {
+      const bgColorToSave = customBgColor ?? selectedBgColor;
+      const payloadLayout = [
+        ...currentElements.filter((el) => el.id !== "layout-metadata"),
+        { id: "layout-metadata", type: "metadata", backgroundColor: bgColorToSave } as any
+      ];
+
       // Save locally in store chapter
-      store.updateChapterLayout(chapterId, currentElements);
+      store.updateChapterLayout(chapterId, payloadLayout);
+      store.saveSpread(chapterId, payloadLayout);
       // Save in S3/DynamoDB database
       await updateChapter(currentBiographyId, chapterId, currentUser.id, {
-        layout: currentElements
+        layout: payloadLayout
       });
       if (!silent) {
         addToast({
-          title: "Layout Preserved",
-          message: "Your scrapbook layout has been safely inscribed.",
+          title: "Spread Saved to Legacy Book",
+          message: "✨ Your scrapbook spread has been preserved for export.",
           variant: "success",
           duration: 2500,
         });
@@ -140,16 +142,193 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
     };
   }, [elements, saveLayout]);
 
-  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    if (isOpen) {
+      import("../pdf/fonts").then(({ loadWebFonts }) => {
+        loadWebFonts();
+      }).catch(err => {
+        console.error("Failed to load web fonts dynamically:", err);
+      });
+    }
+  }, [isOpen]);
+
+  // Load layout from current chapter on open, dynamic merging and auto AI layout
+  useEffect(() => {
+    if (!isOpen) {
+      hasInitializedRef.current = false;
+      return;
+    }
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
+    const initLayout = async () => {
+      const state = useBiographyStore.getState();
+      const currentChapter = state.chapters.find((c) => c.id === chapterId);
+      if (!currentChapter) return;
+
+      const activeMessages = state.messages.filter((m) => m.chapterId === chapterId);
+      const savedLayout = (currentChapter.layout && Array.isArray(currentChapter.layout))
+        ? (currentChapter.layout as LayoutElement[])
+        : [];
+
+      // Extract metadata if present
+      const metadataItem = savedLayout.find((el) => el.id === "layout-metadata");
+      if (metadataItem && (metadataItem as any).backgroundColor) {
+        setSelectedBgColor((metadataItem as any).backgroundColor);
+      } else {
+        setSelectedBgColor("#FDFBF7");
+      }
+
+      // Filter out elements that belong to deleted messages and omit metadata block from elements state
+      const activeLayout = savedLayout.filter((el) => {
+        if (el.id === "layout-metadata") return false;
+        if (el.id === "chapter-title" || el.type === "sticker") return true;
+        return activeMessages.some(
+          (m) => m.id === el.id || m.id === (el as any).memoryId || m.id === (el as any).memory_id
+        );
+      });
+
+      // Find messages that don't have an element yet
+      const missingMessages = activeMessages.filter((m) => {
+        return !activeLayout.some(
+          (el) => el.id === m.id || (el as any).memoryId === m.id || (el as any).memory_id === m.id
+        );
+      });
+
+      if (activeLayout.length === 0 && activeMessages.length > 0) {
+        // First entry, empty layout: run the AI layout engine!
+        try {
+          const memoriesSummary = activeMessages.map((m) => ({
+            id: m.id,
+            type: m.media?.some((med) => med.type === "image") ? "image" : "text",
+            polished_caption: m.polishedCaption || m.content,
+            original_text: m.originalText || m.content,
+            image_url: m.media?.find((med) => med.type === "image")?.url,
+          }));
+
+          const layoutItems = await generateLayout(chapterId, memoriesSummary, seedRef.current);
+          const autoElements: LayoutElement[] = activeMessages.map((m, i) => {
+            const match = layoutItems.find((item) => item.memory_id === m.id) || layoutItems[i % Math.max(1, layoutItems.length)];
+            const xPos = match ? Math.round((match.x_percent / 100) * 800) : 150 + (i * 30) % 300;
+            const yPos = match ? Math.round((match.y_percent / 100) * 1000) + 120 : 200 + (i * 50) % 400;
+            const widthVal = match ? Math.max(120, Math.round((match.width_percent / 100) * 800)) : 320;
+            const rotationVal = match ? match.rotation_deg : (i % 2 === 0 ? 3 : -3);
+            const imageObj = m.media?.find((med) => med.type === "image");
+
+            return {
+              id: m.id,
+              memoryId: m.id,
+              type: imageObj ? "image" : "text",
+              url: imageObj?.url || "",
+              content: m.content,
+              x: xPos,
+              y: yPos,
+              width: widthVal,
+              rotation: rotationVal,
+              textVariant: m.activeVariant || "polished"
+            } as any;
+          });
+
+          setElements(autoElements);
+          saveLayout(autoElements, false);
+        } catch (err) {
+          console.error("Auto AI layout failed", err);
+          const fallbackList = activeMessages.map((m, i) => {
+            const imageObj = m.media?.find((med) => med.type === "image");
+            return {
+              id: m.id,
+              memoryId: m.id,
+              type: imageObj ? "image" : "text",
+              url: imageObj?.url || "",
+              content: m.content,
+              x: 150 + (i * 30) % 300,
+              y: 200 + (i * 50) % 400,
+              width: 320,
+              rotation: i % 2 === 0 ? 3 : -3,
+              textVariant: m.activeVariant || "polished"
+            } as any;
+          });
+          setElements(fallbackList);
+          saveLayout(fallbackList, false);
+        }
+      } else if (missingMessages.length > 0) {
+        // Layout exists but we have new messages: append them dynamically
+        const newElements = [...activeLayout];
+        missingMessages.forEach((m) => {
+          const imageObj = m.media?.find((med) => med.type === "image");
+          newElements.push({
+            id: m.id,
+            memoryId: m.id,
+            type: imageObj ? "image" : "text",
+            url: imageObj?.url || "",
+            content: m.content,
+            x: 150 + (newElements.length * 30) % 300,
+            y: 200 + (newElements.length * 45) % 400,
+            width: imageObj ? 320 : 420,
+            rotation: newElements.length % 2 === 0 ? 3.5 : -3.5,
+            textVariant: m.activeVariant || "polished"
+          } as any);
+        });
+
+        setElements(newElements);
+        saveLayout(newElements, false);
+      } else {
+        setElements(activeLayout);
+      }
+    };
+
+    initLayout();
+  }, [isOpen, chapterId, saveLayout]);
+
+  // Handle ESC key to exit fullscreen and Delete key to delete selected element
+  const [elementToDelete, setElementToDelete] = useState<string | null>(null);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (!isOpen) return;
+      if (e.key === "Escape") {
         onClose();
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !isEditingTitle) {
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        if (activeTag !== "input" && activeTag !== "textarea") {
+          setElementToDelete(selectedId);
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, selectedId, isEditingTitle, onClose]);
+
+  const confirmDeleteElement = async () => {
+    if (!elementToDelete) return;
+    const targetId = elementToDelete;
+    setElementToDelete(null);
+
+    const updated = elements.filter((el) => el.id !== targetId);
+    setElements(updated);
+    if (selectedId === targetId) setSelectedId(null);
+
+    // Sync deletion to chat store & backend API
+    const matchingMsg = messages.find(
+      (m) => m.id === targetId || m.id === (elements.find((el) => el.id === targetId) as any)?.memoryId
+    );
+    if (matchingMsg) {
+      try {
+        await deleteMemoryApi(matchingMsg.id, currentUser.id);
+        store.removeMessage(matchingMsg.id);
+      } catch (err) {
+        console.error("Delete sync error", err);
+      }
+    }
+
+    saveLayout(updated, true);
+    addToast({
+      title: "Element Removed",
+      message: "The element has been removed from your scrapbook spread and archives.",
+      variant: "info",
+      duration: 2000,
+    });
+  };
 
   const handleAddText = () => {
     const newEl: LayoutElement = {
@@ -178,6 +357,11 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
     setElements((prev) => [...prev, newEl]);
     setSelectedId(newEl.id);
     setShowStickers(false);
+  };
+
+  const handleBgColorChange = (color: string) => {
+    setSelectedBgColor(color);
+    void saveLayout(elements, true, color);
   };
 
   const handleUploadImage = () => {
@@ -213,8 +397,7 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
   };
 
   const handleDeleteElement = (id: string) => {
-    setElements((prev) => prev.filter((el) => el.id !== id));
-    if (selectedId === id) setSelectedId(null);
+    setElementToDelete(id);
   };
 
   const updateElementProp = (id: string, updates: Partial<LayoutElement>) => {
@@ -340,6 +523,13 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
 
   return (
     <div className="fixed inset-0 z-[99999] bg-[#100018] flex select-none overflow-hidden font-serif">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        className="hidden"
+      />
       {/* Background stardust glow simulation */}
       <div className="absolute inset-0 bg-[#150220] bg-gradient-to-b from-[#210230] via-[#100018] to-[#07000c] pointer-events-none" />
       <div className="absolute top-16 left-1/4 w-96 h-96 rounded-full bg-purple-600/10 blur-[120px] pointer-events-none" />
@@ -352,11 +542,14 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
       >
         {/* Infinite Parchment Scroll Sheet (Grid snap backdrop simulated) */}
         <div
-          className="relative min-h-[1600px] w-[1000px] bg-[#fdfbf7] shadow-[0_25px_60px_rgba(0,0,0,0.6)] rounded-2xl border border-gold/30 paper-texture select-none shrink-0"
+          className="relative min-h-[1600px] w-[1000px] shadow-[0_25px_60px_rgba(0,0,0,0.6)] rounded-2xl border border-gold/30 paper-texture select-none shrink-0"
           style={{
+            backgroundColor: selectedBgColor,
             backgroundImage: "radial-gradient(circle, rgba(166,124,46,0.03) 1.5px, transparent 1.5px)",
-            backgroundSize: "20px 20px"
-          }}
+            backgroundSize: "20px 20px",
+            WebkitPrintColorAdjust: "exact",
+            printColorAdjust: "exact"
+          } as any}
         >
           {/* Scroll Wooden rollers styling top & bottom */}
           <div className="absolute -top-3 inset-x-12 h-6 rounded-full bg-gradient-to-b from-[#eedcb4] via-[#c4a675] to-[#7c5d32] border border-gold/30 shadow-md" />
@@ -366,39 +559,96 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
           <div className="absolute left-6 inset-y-12 w-0.5 bg-gold/15" />
           <div className="absolute right-6 inset-y-12 w-0.5 bg-gold/15" />
 
-          {/* Heading Title of current chapter */}
-          <div className="text-center pt-16 pb-8">
-            <h1 className="font-display text-4xl text-[#744c09] uppercase tracking-widest font-extrabold mb-1">
-              {currentChapter?.title ?? "The First Pages"}
-            </h1>
-            <p className="text-xs uppercase tracking-widest text-[#a67c2e] font-sans font-bold">
+          {/* Heading Title of current chapter with inline edit protection */}
+          <div className="text-center pt-16 pb-8 select-none">
+            <div className="group relative inline-block">
+              {isEditingTitle ? (
+                <input
+                  autoFocus
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  onBlur={handleSaveTitle}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveTitle()}
+                  className="font-display text-4xl text-[#744c09] uppercase tracking-widest font-extrabold bg-transparent border-b-2 border-[#744c09] outline-none text-center px-2 py-1 max-w-xl"
+                />
+              ) : (
+                <h1
+                  onClick={() => setIsEditingTitle(true)}
+                  className="font-display text-4xl text-[#744c09] uppercase tracking-widest font-extrabold mb-1 codex-pointer hover:text-[#5a3a06] transition flex items-center justify-center gap-2 group"
+                  title="Click to edit chapter title"
+                >
+                  <span>{currentChapter?.title ?? "The First Pages"}</span>
+                  <Pencil className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#a67c2e]" />
+                </h1>
+              )}
+            </div>
+            <p className="text-xs uppercase tracking-widest text-[#a67c2e] font-sans font-bold mt-1">
               {currentChapter?.timePeriod ?? "Memoir Chapter Record"}
             </p>
           </div>
 
-          {/* Layout Elements Container */}
-          <div className="relative w-full min-h-[1300px]">
-            {elements.map((el) => {
-              const isSelected = selectedId === el.id;
-              
-              return (
-                <ScrapbookElementWrapper
-                  key={el.id}
-                  element={el}
-                  isSelected={isSelected}
-                  onSelect={(e) => {
-                    e.stopPropagation();
-                    setSelectedId(el.id);
-                  }}
-                  onDragStart={(e) => handleDragStart(e, el)}
-                  onResizeStart={(e) => handleResizeStart(e, el)}
-                  onRotateStart={(e, ref) => handleRotateStart(e, el, ref)}
-                  onDelete={() => handleDeleteElement(el.id)}
-                  onChangeContent={(val) => updateElementProp(el.id, { content: val })}
-                />
-              );
-            })}
-          </div>
+          {/* Layout Elements Container (Mobile Vertical Stack Fallback vs Desktop Freeform Canvas) */}
+          {isMobile ? (
+            <div className="w-full space-y-4 p-4 max-w-md mx-auto overflow-y-auto pb-20">
+              {elements.map((el) => {
+                const memory = messages.find((m) => m.id === el.id || m.id === (el as any).memoryId);
+                const variant = memory?.activeVariant || el.textVariant || "polished";
+                const textVal = memory
+                  ? (variant === "original" ? (memory.originalText || memory.content) : (memory.polishedCaption || memory.content))
+                  : el.content;
+                const fontClass = variant === "original" ? "font-script font-sans text-[#3E2723]" : "font-serif italic text-[#2c1e16]";
+
+                return (
+                  <div key={el.id} className="bg-white p-4 rounded-xl shadow-lg border border-gold/20 relative">
+                    <button
+                      onClick={() => handleDeleteElement(el.id)}
+                      className="absolute top-2 right-2 text-red-400 p-1 hover:bg-red-50 rounded"
+                      title="Delete element"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    {el.type === "text" && (
+                      <p className={`${fontClass} text-base pr-6`}>{textVal}</p>
+                    )}
+                    {el.type === "image" && (
+                      <div className="space-y-2">
+                        <img src={el.url} alt="Mobile keepsake" className="w-full h-auto rounded-lg object-cover" />
+                        {textVal && (
+                          <p className={`${fontClass} text-sm text-center italic mt-2`}>{textVal}</p>
+                        )}
+                      </div>
+                    )}
+                    {el.type === "sticker" && (
+                      <span className="text-4xl block text-center">{el.content}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="relative w-full min-h-[1300px]">
+              {elements.map((el) => {
+                const isSelected = selectedId === el.id;
+                
+                return (
+                  <ScrapbookElementWrapper
+                    key={el.id}
+                    element={el}
+                    isSelected={isSelected}
+                    onSelect={(e) => {
+                      e.stopPropagation();
+                      setSelectedId(el.id);
+                    }}
+                    onDragStart={(e) => handleDragStart(e, el)}
+                    onResizeStart={(e) => handleResizeStart(e, el)}
+                    onRotateStart={(e, ref) => handleRotateStart(e, el, ref)}
+                    onDelete={() => handleDeleteElement(el.id)}
+                    onChangeContent={(val) => updateElementProp(el.id, { content: val })}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -482,6 +732,31 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
                 ))}
               </div>
             </div>
+
+            {/* Backdrop Canvas Theme Selector */}
+            <div className="border-t border-gold/15 pt-4">
+              <p className="text-[10px] text-gold/60 font-sans uppercase font-bold tracking-wider mb-2.5">
+                Canvas Backdrop Color
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {THEME_COLORS.map((c) => (
+                  <button
+                    key={c.color}
+                    type="button"
+                    onClick={() => handleBgColorChange(c.color)}
+                    className={`w-7 h-7 rounded-full border-2 transition hover:scale-110 active:scale-95 flex items-center justify-center ${
+                      selectedBgColor === c.color ? "border-gold-bright ring-1 ring-gold shadow-md" : "border-gold/30 hover:border-gold/60"
+                    }`}
+                    style={{ backgroundColor: c.color }}
+                    title={c.name}
+                  >
+                    {selectedBgColor === c.color && (
+                      <span className="text-[10px] text-black font-bold">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -540,7 +815,17 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
           )}
         </button>
 
-        <div className="w-px h-6 bg-gold/20 mx-1" />
+
+        <button
+          onClick={() => {
+            console.log('Living Scroll triggered', { memoriesCount: currentSpread.length });
+            setIsLivingScrollOpen(true);
+          }}
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#F4D03F] via-[#D4AF37] to-[#B8860B] text-[#1b0227] rounded-full hover:brightness-105 active:scale-95 transition text-xs font-sans font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(212,175,55,0.45)] hover:shadow-[0_0_25px_rgba(212,175,55,0.8)]"
+        >
+          <Sparkles className="h-4 w-4" />
+          <span>View Living Scroll</span>
+        </button>
 
         <button
           onClick={() => saveLayout(elements)}
@@ -548,6 +833,14 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
         >
           <Save className="h-4 w-4" />
           <span>Save Layout</span>
+        </button>
+
+        <button
+          onClick={() => setShowExport(true)}
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-800 to-indigo-900 border border-gold/45 text-gold-bright rounded-full hover:brightness-110 active:scale-95 transition text-xs font-sans font-bold uppercase tracking-widest shadow-md"
+        >
+          <BookOpen className="h-4 w-4" />
+          <span>Export Book</span>
         </button>
 
         <button
@@ -559,13 +852,38 @@ export function FullscreenEditor({ isOpen, onClose, chapterId }: FullscreenEdito
         </button>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        hidden
+      <DeleteConfirmationModal
+        isOpen={!!elementToDelete}
+        onClose={() => setElementToDelete(null)}
+        onConfirm={confirmDeleteElement}
+        title="Remove Element From Spread?"
+        description="This element will be deleted from your active chapter spread. This cannot be undone."
       />
+
+      <ExportBookModal
+        isOpen={showExport}
+        onClose={() => setShowExport(false)}
+      />
+
+      {isLivingScrollOpen && (
+        <LivingScrollOverlay
+          memories={elements
+            .filter((el) => el.type === "text" || el.type === "image")
+            .map((el) => {
+              const msg = messages.find((m) => m.id === el.id);
+              return {
+                id: el.id,
+                imageUrl: el.type === "image" ? el.url : undefined,
+                originalText: msg ? (msg.originalText || msg.content || "") : (el.content || ""),
+                polishedCaption: msg ? (msg.polishedCaption || msg.content || "") : (el.content || ""),
+                activeVariant: msg ? (msg.activeVariant || "polished") : (el.textVariant || "polished"),
+                rotation: el.rotation,
+              };
+            })}
+          chapterTitle={currentChapter?.title || "Untold Story"}
+          onClose={() => setIsLivingScrollOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -594,6 +912,23 @@ function ScrapbookElementWrapper({
 }: ScrapbookElementWrapperProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  const messages = useBiographyStore((state) => state.messages);
+  const matchingMemory = messages.find(
+    (m) => m.id === element.id || m.id === (element as any).memoryId || m.id === (element as any).memory_id
+  );
+
+  const activeVariant = matchingMemory?.activeVariant || element.textVariant || "polished";
+  const displayContent = matchingMemory
+    ? (activeVariant === "original"
+        ? (matchingMemory.originalText || matchingMemory.content)
+        : (matchingMemory.polishedCaption || matchingMemory.content))
+    : (element.content || "");
+
+  const fontStyleClass = activeVariant === "original"
+    ? "font-script font-sans text-[#3E2723]"
+    : "font-serif italic text-[#2c1e16]";
 
   // Stop double-click inside wrapper from bubbling
   const handleDoubleClick = (e: React.MouseEvent) => {
@@ -654,7 +989,7 @@ function ScrapbookElementWrapper({
             {isEditing ? (
               <textarea
                 autoFocus
-                defaultValue={element.content}
+                defaultValue={displayContent}
                 onBlur={(e) => {
                   onChangeContent(e.target.value);
                   setIsEditing(false);
@@ -663,8 +998,8 @@ function ScrapbookElementWrapper({
                 style={{ height: "160px" }}
               />
             ) : (
-              <p className="font-serif italic text-lg sm:text-xl text-[#2c1e16] leading-relaxed break-words whitespace-pre-wrap">
-                {element.content}
+              <p className={`${fontStyleClass} text-lg sm:text-xl leading-relaxed break-words whitespace-pre-wrap`}>
+                {displayContent}
               </p>
             )}
             <p className="text-[9px] font-sans text-gold-dim/60 mt-1 uppercase select-none pointer-events-none opacity-0 group-hover/wrapper:opacity-100 transition">
@@ -675,20 +1010,30 @@ function ScrapbookElementWrapper({
 
         {/* Render IMAGE block type (Polaroid layout style) */}
         {element.type === "image" && (
-          <div className="bg-white p-3 pb-8 shadow-xl border border-black/[0.04] relative">
+          <div className="bg-white p-3 pb-9 shadow-xl border border-black/[0.04] relative flex flex-col justify-between">
             {/* Top Tape overlay decoration mockup sticker style */}
             <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-20 h-5 bg-[#eae2d3]/50 border-x border-black/5 rotate-[-2deg] shadow-sm pointer-events-none select-none" />
 
             <div className="w-full aspect-[4/3] bg-parchment/30 overflow-hidden border border-black/5 rounded">
-              <img
-                src={element.url}
-                alt="scrapbook image keepsake"
-                className="w-full h-full object-cover pointer-events-none select-none"
-              />
+              {imgError ? (
+                <div className="w-full h-full bg-[#fcf8f0] flex items-center justify-center border border-dashed border-gold/30 rounded select-none pointer-events-none">
+                  <span className="text-gold/50 text-xs italic">Image Keepsake</span>
+                </div>
+              ) : (
+                <img
+                  src={element.url}
+                  alt="scrapbook image keepsake"
+                  className="w-full h-full object-cover pointer-events-none select-none"
+                  onError={() => {
+                    setImgError(true);
+                    console.error("Failed to load scrapbook layout image:", element.url);
+                  }}
+                />
+              )}
             </div>
             
-            <div className="absolute bottom-2 left-3 font-serif text-[10px] italic text-gray-500 tracking-wide select-none">
-              Inscribed Keepsake Memory
+            <div className={`mt-3 text-center px-1 break-words select-text ${fontStyleClass} text-sm sm:text-base leading-relaxed`}>
+              {displayContent || "Inscribed Keepsake"}
             </div>
           </div>
         )}
