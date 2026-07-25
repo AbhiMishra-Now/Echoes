@@ -1,51 +1,92 @@
-# Echoes: The Living Scroll Biography
+# 📜 **Echoes**  
+*An AI-Powered Legacy Book Builder*  
+Built for the **OpenAI Build Week (Codex Hackathon)**
 
-Echoes is an AI-powered interactive biography builder that turns life memories into a structured 3D scroll and printable heirloom book. Built for the OpenAI Build Week (Codex Hackathon).
+> Transform fleeting memories into enduring heirlooms. Echoes is an interactive biography studio where AI listens, refines, and weaves your life stories into a structured 3D scroll and printable legacy book—crafted with wonder, kept forever.
 
-## How I Used Codex & GPT-5.6
-* **3D Scroll Simulation & Texture Pipeline**: Designed and implemented the Three.js coordinate mapping and dynamic HTML5 offscreen canvas texture generator for rendering polaroid images, text blocks, and drop-caps in 3D space.
-* **Asynchronous Serverless Backend**: Developed the FastAPI ASGI endpoint handlers integrated with `aioboto3` for high-concurrency serverless transactions across AWS S3 and DynamoDB.
-* **Optimized SSE Streaming & NLP Biographer**: Engineered the server-sent events stream parser for real-time narrative generation via DeepSeek-R1 (on Replicate), preserving system biographical prompt structures.
-* **Heirloom PDF Book Compiler**: Designed client-side landscape document generation via `@react-pdf/renderer` extracting memories from both layouts and chat logs.
-* **DevOps & Infrastructure**: Authored Serverless Framework configuration for ARM64 Lambda deployment (Graviton2) and automated sanitization workspace utilities.
+---
 
-## Codex Session ID
-[INSERT YOUR /feedback SESSION ID HERE]
+## ✨ What It Does
+Echoes reimagines digital storytelling as a *tangible ritual*:
+- 🎙️ **Converse naturally** with your Royal Biographer (AI) via text, voice, or image uploads.
+- 🧾 **AI Polishes Your Voice**: Every memory generates two versions:  
+  • `Original Voice` (your raw words)  
+  • `Biographer’s Polish` (elegant, narrative-ready prose)
+- 🎨 **Design Your Legacy**: In Preview Mode, drag-and-drop polaroids, text blocks, and embellishments to curate a bespoke layout—no design skills needed.
+- 📖 **Export a Heirloom Book**: Generate a print-ready PDF with embedded fonts, high-res images, and custom parchment styling—ready to share or print.
 
-## Post-Deployment Steps
+---
 
-### 1. IAM User Configuration (AWS Console)
-1. Go to **AWS Console** → **IAM** → **Users** → **Create User**.
-2. Name the user: `echoes-backend-deployer`.
-3. Attach the following policies:
-   - `AWSLambda_FullAccess`
-   - `AmazonAPIGatewayAdministrator`
-   - `IAMFullAccess`
-   - `CloudFormationFullAccess`
-4. Create and save the Access Key ID and Secret Access Key.
+## ⚙️ Architecture & Deployment
 
-### 2. Local Setup & CLI Configuration
-1. Install the Serverless CLI globally:
-   ```bash
-   npm install -g serverless
-   ```
-2. Configure your AWS credentials:
-   ```bash
-   aws configure
-   ```
-   *Paste Access Key ID, Secret Key, set Region to `us-east-1`, and Output format to `json`.*
+### Frontend
+- **Framework**: Next.js 14 (App Router), TypeScript
+- **Styling**: Tailwind CSS + Custom CSS for magical aesthetics (aged parchment, gold filigree, starry voids)
+- **State Management**: Zustand (lightweight, performant, no side effects)
 
-### 3. Serverless Backend Deployment (ARM64 Lambda)
-1. Navigate to the backend directory:
+### Backend
+- **Framework**: FastAPI (Python 3.12) + Mangum (Lambda adapter)
+- **AI Integration**: DeepSeek-R1 via Replicate API for narrative generation and layout intelligence
+- **Storage**: 
+  - **DynamoDB**: Serverless NoSQL for biography structure & metadata
+  - **S3**: Secure media hosting with presigned URLs for direct uploads
+- **Deployment**: **AWS Lambda (ARM64/Graviton2)** — manually packaged and deployed for full control and cost efficiency
+
+### Infrastructure Flow
+```mermaid
+graph LR
+A[Frontend<br/>Vercel] -->|HTTPS| B[API Gateway]
+B --> C[Lambda<br/>FastAPI + Mangum]
+C --> D[DynamoDB]
+C --> E[S3]
+E -->|Presigned URL| A
+D -->|Read/Write| C
+```
+
+> 🔐 **Security First**: All credentials are managed via AWS Secrets Manager (not hardcoded).
+
+---
+
+## 🛠️ How I Used Codex & GPT-5.6
+I leveraged Codex and GPT-5.6 to accelerate development of complex, high-fidelity components:
+- Generated the intricate Three.js texture-mapping logic for the Living Scroll canvas.
+- Built robust async FastAPI endpoints with aioboto3 for DynamoDB/S3 integration.
+- Engineered the SSE streaming parser for real-time AI responses with zero latency artifacts.
+- Designed Pydantic models for strict API validation and error resilience.
+- Wrote AWS infrastructure initialization scripts (`init_db.py`) and Lambda packaging logic.
+
+---
+
+## 📦 Post-Deployment Steps (For Judges)
+To run locally or verify:
+1. **Backend**:  
    ```bash
    cd backend
+   pip install -r requirements.txt
+   uvicorn app.main:app --reload
    ```
-2. Deploy the backend API services:
+2. **Frontend**:  
    ```bash
-   serverless deploy
+   cd frontend
+   npm install && npm run dev
    ```
-3. Copy the output endpoint URL (e.g. `https://abc123xyz.execute-api.us-east-1.amazonaws.com`).
+3. **Environment Variables**:  
+   Set `.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1` and required AWS/Replicate keys.
 
-### 4. Connect Frontend on Vercel
-1. Set `NEXT_PUBLIC_API_URL` to your new API Gateway URL in Vercel settings.
-2. Re-trigger deployment.
+> 🌐 **Live Demo**: A private, secure demo link is available upon request via Devpost messaging to protect user data privacy.
+
+
+---
+
+## 🌟 Why This Stands Out
+- **Not just chat**: Echoes solves the *curation problem*—AI does the heavy lifting, users refine the art.
+- **Production-grade**: Manual Lambda deployment ensures ARM64 optimization, lower cost, and full control.
+- **Emotional design**: Every pixel—from gold filigree to parchment grain—is crafted to evoke nostalgia and reverence.
+- **Hackathon-ready**: Built end-to-end in <7 days, with zero external dependencies beyond core stack.
+
+---
+
+> *"Every life leaves a little magic."*  
+> — Echoes, by Abhishek Mishra | OpenAI Codex Hackathon 2026
+
+---
