@@ -1,19 +1,24 @@
 service: echoes-backend
 
+useDotenv: true
 
 provider:
   name: aws
   runtime: python3.12
-  architecture: arm64          # CRITICAL: Enables Graviton2
+  architecture: arm64
   region: us-east-1
-  memorySize: 512              # ARM64 performs better at lower memory
+  memorySize: 512
   timeout: 30
   environment:
-    AWS_REGION: ${self:provider.region}
-    DYNAMODB_TABLE: echoes_biographies
-    S3_BUCKET: echoes-media-bucket-YOURINITIALS
+    AWS_REGION: ${env:AWS_REGION, 'us-east-1'}
+    DYNAMODB_TABLE: ${env:DYNAMODB_TABLE, 'echoes_biographies'}
+    S3_BUCKET: ${env:S3_BUCKET, 'echoes-media-bucket-ak-sg'}
     REPLICATE_API_TOKEN: ${env:REPLICATE_API_TOKEN}
-  
+    REPLICATE_MODEL: ${env:REPLICATE_MODEL, 'deepseek-ai/deepseek-r1'}
+    AWS_ACCESS_KEY_ID: ${env:AWS_ACCESS_KEY_ID}
+    AWS_SECRET_ACCESS_KEY: ${env:AWS_SECRET_ACCESS_KEY}
+    BACKEND_CORS_ORIGINS: '["*"]'
+
   iam:
     role:
       statements:
@@ -25,15 +30,6 @@ provider:
 
 functions:
   api:
-    handler: handler.handler     # Points to handler.py
-    events:
-      - httpApi: '*'             # Creates HTTP API Gateway
-
-plugins:
-  - serverless-python-requirements
-
-custom:
-  pythonRequirements:
-    dockerizePip: non-linux      # Ensures ARM64 compatible binaries
-    slim: true                   # Reduces package size
-    strip: false                 # Prevents stripping needed libs
+    handler: handler.handler
+    url:
+      cors: true
