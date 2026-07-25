@@ -30,7 +30,7 @@ CorsOrigins = Annotated[list[str], BeforeValidator(parse_origins)]
 class Settings(BaseSettings):
     """Validated runtime configuration; secrets are supplied only by the environment."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore")
 
     aws_region: str = Field(default="us-east-1", alias="AWS_REGION")
     aws_access_key_id: str | None = Field(default=None, alias="AWS_ACCESS_KEY_ID")
